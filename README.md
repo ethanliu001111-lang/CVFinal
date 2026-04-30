@@ -17,6 +17,25 @@ https://ieeexplore.ieee.org/document/8953615
 Kanazawa, A., Black, M. J., Jacobs, D. W., & Malik, J. "End-to-end Recovery of Human Shape and Pose." CVPR, 2018.
 https://ieeexplore.ieee.org/document/8578842
 
+## Presentation format
+1. Introduce your research question/topic
+2. Summarize the 2–3 core papers clearly and concisely
+3. Explain key concepts, methods, or findings
+4. Highlight connections between papers
+5. Include motivation (why this topic matters)
+6. Conclude with implications or open questions
+
+## Literature Review format
+### Format:
+1. 2 pages (maximum)
+2. LaTeX required (provide .tex file and compiled PDF)
+3. Single-spaced, standard margins, 11–12pt font
+### Content:
+1. Introduction: motivate the topic and define the research question
+2. Main body: synthesize the 2–3 papers– Describe classical and recent contributions– Explain methodologies, key results, and limitations– Highlight connections and differences between papers
+3. Conclusion: summarize takeaways and suggest future directions
+4. References: cite all papers (BibTeX style preferred)
+
 ## work Checklist:
 1. read and summarize materials
 2. Project Report
