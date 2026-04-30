@@ -9,10 +9,13 @@
 ## Reading Materials
 1. OpenPose:
 Cao, Z., Hidalgo, G., Simon, T., Wei, S.-E., & Sheikh, Y. "OpenPose: Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields." IEEE TPAMI, 2019.
+https://ieeexplore.ieee.org/document/8765346
 2. HRNet:
 Sun, K., Xiao, B., Liu, D., & Wang, J. "Deep High-Resolution Representation Learning for Human Pose Estimation." CVPR, 2019.
+https://ieeexplore.ieee.org/document/8953615
 3. HMR:
 Kanazawa, A., Black, M. J., Jacobs, D. W., & Malik, J. "End-to-end Recovery of Human Shape and Pose." CVPR, 2018.
+https://ieeexplore.ieee.org/document/8578842
 
 ## work Checklist:
 1. read and summarize materials
