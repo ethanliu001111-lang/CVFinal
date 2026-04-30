@@ -4,7 +4,7 @@
 1. Submission Deadline: Sunday, May 10th, 11:59 PM EDT
 2. Presentation Date & Time: Monday, May 11th, 5:00 PM – 9:00 PM
 3. Presentation Location: 60FA 110
-4. Submission Content: Presentation Powerpoint + Project Report + Wrking Model
+4. Submission Content: Presentation Powerpoint + Project Report + Working Model
 
 ## Reading Materials
 1. OpenPose:
@@ -13,6 +13,12 @@ Cao, Z., Hidalgo, G., Simon, T., Wei, S.-E., & Sheikh, Y. "OpenPose: Realtime Mu
 Sun, K., Xiao, B., Liu, D., & Wang, J. "Deep High-Resolution Representation Learning for Human Pose Estimation." CVPR, 2019.
 3. HMR:
 Kanazawa, A., Black, M. J., Jacobs, D. W., & Malik, J. "End-to-end Recovery of Human Shape and Pose." CVPR, 2018.
+
+## work Checklist:
+1. read and summarize materials
+2. Project Report
+3. Working Model
+4. Presentation PowerPoint
 
 ## Plan and Responsebility
 Yiqiao Liu:
