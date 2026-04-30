@@ -7,11 +7,11 @@
 4. Submission Content: Presentation Powerpoint + Project Report + Wrking Model
 
 ## Reading Materials
-1- OpenPose:
+1. OpenPose:
 Cao, Z., Hidalgo, G., Simon, T., Wei, S.-E., & Sheikh, Y. "OpenPose: Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields." IEEE TPAMI, 2019.
-2-HRNet:
+2. HRNet:
 Sun, K., Xiao, B., Liu, D., & Wang, J. "Deep High-Resolution Representation Learning for Human Pose Estimation." CVPR, 2019.
-3-HMR:
+3. HMR:
 Kanazawa, A., Black, M. J., Jacobs, D. W., & Malik, J. "End-to-end Recovery of Human Shape and Pose." CVPR, 2018.
 
 ## Plan and Responsebility
