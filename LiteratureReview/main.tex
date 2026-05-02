@@ -1,47 +1,101 @@
-\documentclass[11pt,twocolumn]{article}
+\documentclass[conference]{IEEEtran}
 
-\usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
-\usepackage{setspace}
-\usepackage[numbers]{natbib}
+\usepackage{cite}
+\usepackage{float}
 \usepackage{hyperref}
 
-\setstretch{1.0}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0.4em}
+\title{Literature Review on Human Pose Estimation}
 
-\title{\textbf{Literature Review on Human Pose Estimation}}
-\author{Yiqiao Liu \and Taijia Liang}
-\date{April 2026}
+\author{
+\IEEEauthorblockN{Yiqiao Liu \and Taijia Liang}
+\IEEEauthorblockA{Introduction to Computer Vision\\
+Spring 2026}
+}
 
 \begin{document}
 
 \maketitle
 
-% Keep the full report within the strict 2-page limit from the project PDF.
 \section{Introduction}
 Introduce the topic, explain why it matters in computer vision, and clearly state
 the research question your report will address.
 
-\section{Main Body}
+\section{Related Materials}
 Synthesize the selected papers rather than summarizing them independently.
 Discuss:
-\begin{itemize}
-    \item the classical and recent contributions,
-    \item the core methodologies,
-    \item the key empirical results,
-    \item the main limitations, and
-    \item the connections and differences across the papers.
-\end{itemize}
 
-When citing papers in the text, use BibTeX-backed citations such as
-\citep{cao2019openpose,sun2019hrnet,kanazawa2018hmr}.
+\subsection{Part Affinity Fields}
+The challenges of real-time multi-person 2D estimation lie in the significant
+uncertainty caused by the unknown number of people in the image, spatial
+interference due to interactions and overlaps between people, and the
+substantial increase in spatial complexity as the number of people increases.
+Cao et al.'s Part Affinity Fields (PAFs) \cite{cao2019openpose} effectively
+address these issues. Compared to traditional Top-Down methods (reusing
+single-person pose assessment techniques) and traditional Bottom-up
+techniques, they achieve efficient identification and reconstruction of
+unstructured pairwise relationships for a variable number of human body parts
+through PAFs (a set of $2\mathrm{D}$ vector fields) and Confidence Maps (a set of
+confidence maps of human body parts) \cite{cao2019openpose}.
+
+\subsubsection{Methodology}
+The entire system takes $w \times h$ color images as input.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{figure1.png}
+    \caption{Multi-stage prediction network used in OpenPose.}
+    \label{fig:openpose-pipeline}
+\end{figure}
+
+As shown in Figure~\ref{fig:openpose-pipeline}, a multi-stage prediction
+network is used for convolutional neural networks (CNNs)
+\cite{cao2019openpose}. Based on refining PAF (the degree of correlation
+between individual human limbs), Gaussian peak convolution is used to further
+convolve the confidence map (the location of individual human parts)
+\cite{cao2019openpose}. By changing the $7 \times 7$ convolutional kernel to
+three consecutive $3 \times 3$ convolutional kernels, the operation number is
+effectively reduced from $2 \times 7^{2} - 1 = 97$ to $51$
+\cite{cao2019openpose}. Finally, a spatially
+weighted loss function is used to address the problem of not being able to
+completely label all individuals. Regarding Multi-Person Parsing, Cao et al.
+first simplified the problem by using a spanning tree skeleton and bipartite
+graphs of multiple limbs \cite{cao2019openpose}. Eventually, Greedy inferring
+is used to match local data to solve the global problem
+\cite{cao2019openpose}.
+
+\subsubsection{Evaluation}
+the key empirical results and the main limitations
+
+\subsection{Deep High-Resolution Representation Learning}
+the classical and recent contributions,
+
+\subsubsection{Methodology}
+the core methodologies,
+
+\subsubsection{Evaluation}
+the key empirical results and the main limitations
+
+\subsection{End-to-end Recovery}
+the classical and recent contributions,
+
+\subsubsection{Methodology}
+the core methodologies,
+
+\subsubsection{Evaluation}
+the key empirical results and the main limitations
+
+\section{Connection and Difference Evaluation}
 
 \section{Conclusion}
 Summarize the main takeaways from the literature and suggest promising future
 directions.
 
-\bibliographystyle{plainnat}
+% Keep the bibliography non-empty while drafting, even if some in-text cites
+% are temporarily removed.
+\nocite{cao2019openpose,sun2019hrnet,kanazawa2018hmr}
+
+\bibliographystyle{IEEEtran}
 \bibliography{refs}
 
 \end{document}
