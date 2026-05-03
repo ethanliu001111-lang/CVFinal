@@ -1,101 +1,214 @@
-\documentclass[conference]{IEEEtran}
+% =============================================================================
+% Intro to Computer Vision — Spring 2026 — Final Project Literature Review
+% Topic: From 2D Pose to 3D Human Recovery (OpenPose / HRNet / HMR)
+% Authors: Yiqiao Liu, Taijia Liang
+% LaTeX class: article (per PDF §6.5 "standard LaTeX document class (article)")
+% Page limit: 2 pages STRICT — keep prose dense; trim if overflow.
+% =============================================================================
+\documentclass[11pt]{article}
 
+\usepackage[letterpaper,margin=1in]{geometry}
 \usepackage{graphicx}
 \usepackage{cite}
 \usepackage{float}
 \usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{microtype}
+\usepackage{authblk}
 
-\title{Literature Review on Human Pose Estimation}
+\setlength{\parskip}{2pt}
+\captionsetup{font=small,labelfont=bf,skip=4pt}
 
-\author{
-\IEEEauthorblockN{Yiqiao Liu \and Taijia Liang}
-\IEEEauthorblockA{Introduction to Computer Vision\\
-Spring 2026}
-}
+\title{\vspace{-1.2em}From 2D Keypoints to 3D Bodies:\\
+  A Literature Review on Human Pose Estimation}
+\author{Yiqiao Liu \and Taijia Liang}
+\affil{Introduction to Computer Vision, Spring 2026}
+\date{\vspace{-1em}}
 
 \begin{document}
-
 \maketitle
+\vspace{-1.5em}
 
+% -----------------------------------------------------------------------------
 \section{Introduction}
-Introduce the topic, explain why it matters in computer vision, and clearly state
-the research question your report will address.
+% OWNER: Taijia | BUDGET: ~0.20 page | TODO: write 5/7
+% Talking points to weave in (~5-7 sentences):
+%   1. Motivation: pose estimation powers motion capture, AR/VR, sports analytics,
+%      tele-rehabilitation -- a cross-cutting CV primitive.
+%   2. The challenge: occlusion, foreshortening, high DOF, single-view ambiguity,
+%      scarcity of 3D ground truth.
+%   3. Research question (one sentence): "How has the field progressed from
+%      estimating 2D keypoints in pixel space to recovering full 3D parametric
+%      body shape from a single RGB image, and what design choices in
+%      representation, supervision, and architecture enabled this leap?"
+%   4. Roadmap: we cover three landmark works that span this leap --
+%      OpenPose (2D multi-person, bottom-up), HRNet (2D high-resolution backbone),
+%      and HMR (single-image 3D via SMPL).
+\textit{[Placeholder] Motivate the topic, define the research question, and
+preview the three landmark methods reviewed below.}
 
-\section{Related Materials}
-Synthesize the selected papers rather than summarizing them independently.
-Discuss:
+% -----------------------------------------------------------------------------
+\section{Background}
+% OWNER: Taijia | BUDGET: ~0.15 page | TODO: write 5/7
+% MUST cite (already in refs.bib): \cite{loper2015smpl,bogo2016smplify,wei2016cpm,newell2016hourglass}
+% Talking points:
+%   - Classical era: depth-based parts (Shotton 2011 / Kinect),
+%     deformable part models for 2D pose.
+%   - Deep era: heatmap regression (CPM, Stacked Hourglass) became the standard
+%     2D pipeline; HRNet refines this line.
+%   - Parametric body models: SMPL \cite{loper2015smpl} parameterizes the body
+%     by 10 shape and 72 pose values, providing a low-dim handle on 3D meshes.
+%     SMPLify \cite{bogo2016smplify} fits SMPL to 2D keypoints by optimization;
+%     HMR replaces this loop with a single feed-forward regressor.
+\textit{[Placeholder] Briefly review heatmap-based 2D pose lineage (CPM,
+Stacked Hourglass) and the SMPL parametric body model that underlies HMR.}
 
-\subsection{Part Affinity Fields}
+% -----------------------------------------------------------------------------
+\section{Three Core Methods}
+
+\subsection{OpenPose: Real-time Multi-person 2D Pose via PAFs}
+% OWNER: Yiqiao | STATUS: drafted (kept verbatim from initial version)
 The challenges of real-time multi-person 2D estimation lie in the significant
 uncertainty caused by the unknown number of people in the image, spatial
 interference due to interactions and overlaps between people, and the
 substantial increase in spatial complexity as the number of people increases.
-Cao et al.'s Part Affinity Fields (PAFs) \cite{cao2019openpose} effectively
-address these issues. Compared to traditional Top-Down methods (reusing
-single-person pose assessment techniques) and traditional Bottom-up
-techniques, they achieve efficient identification and reconstruction of
-unstructured pairwise relationships for a variable number of human body parts
-through PAFs (a set of $2\mathrm{D}$ vector fields) and Confidence Maps (a set of
-confidence maps of human body parts) \cite{cao2019openpose}.
-
-\subsubsection{Methodology}
-The entire system takes $w \times h$ color images as input.
+Cao et al.'s Part Affinity Fields (PAFs)~\cite{cao2019openpose} effectively
+address these issues. Compared to traditional top-down methods (reusing
+single-person pose assessment techniques) and traditional bottom-up techniques,
+they achieve efficient identification and reconstruction of unstructured
+pairwise relationships for a variable number of human body parts through PAFs
+(a set of $2\mathrm{D}$ vector fields) and Confidence Maps (a set of confidence
+maps of human body parts)~\cite{cao2019openpose}.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\columnwidth]{figure1.png}
+    \includegraphics[width=0.62\columnwidth]{figure1.png}
     \caption{Multi-stage prediction network used in OpenPose.}
     \label{fig:openpose-pipeline}
 \end{figure}
 
 As shown in Figure~\ref{fig:openpose-pipeline}, a multi-stage prediction
-network is used for convolutional neural networks (CNNs)
-\cite{cao2019openpose}. Based on refining PAF (the degree of correlation
-between individual human limbs), Gaussian peak convolution is used to further
-convolve the confidence map (the location of individual human parts)
-\cite{cao2019openpose}. By changing the $7 \times 7$ convolutional kernel to
-three consecutive $3 \times 3$ convolutional kernels, the operation number is
-effectively reduced from $2 \times 7^{2} - 1 = 97$ to $51$
-\cite{cao2019openpose}. Finally, a spatially
-weighted loss function is used to address the problem of not being able to
-completely label all individuals. Regarding Multi-Person Parsing, Cao et al.
-first simplified the problem by using a spanning tree skeleton and bipartite
-graphs of multiple limbs \cite{cao2019openpose}. Eventually, Greedy inferring
-is used to match local data to solve the global problem
-\cite{cao2019openpose}.
+network is used for convolutional neural networks (CNNs)~\cite{cao2019openpose}.
+Based on refining PAF (the degree of correlation between individual human
+limbs), Gaussian peak convolution is used to further convolve the confidence
+map (the location of individual human parts)~\cite{cao2019openpose}. By
+changing the $7\!\times\!7$ convolutional kernel to three consecutive
+$3\!\times\!3$ convolutional kernels, the operation count is effectively
+reduced from $2\!\times\!7^{2}-1=97$ to $51$~\cite{cao2019openpose}. A
+spatially weighted loss handles unlabelled individuals. For multi-person
+parsing, Cao et al.\ simplify the bipartite matching to a spanning-tree
+skeleton solved by greedy inference~\cite{cao2019openpose}.
 
-\subsubsection{Evaluation}
-the key empirical results and the main limitations
+% TODO: 1-2 sentence evaluation summary: COCO 2016 keypoint AP, runtime
+% (~22 FPS on Titan X), and limitations (small-person AP, foot-only mistakes).
 
-\subsection{Deep High-Resolution Representation Learning}
-the classical and recent contributions,
+\subsection{HRNet: Deep High-Resolution Representation Learning}
+% OWNER: Taijia | BUDGET: ~0.30 page | TODO: write 5/6, finalize 5/7
+% Talking points:
+%   - Core insight: prior pose nets (Hourglass \cite{newell2016hourglass}) recover
+%     resolution after downsampling. HRNet maintains high resolution THROUGHOUT
+%     by running parallel multi-resolution streams + repeated multi-scale fusion.
+%   - Architecture: 4 parallel streams at 1/4, 1/8, 1/16, 1/32 resolution; each
+%     fusion stage exchanges features across all scales (sums after up/down
+%     sampling), preserving spatially precise heatmaps at the high-res branch.
+%   - Empirical: SOTA on COCO val (AP 75.5 with HRNet-W48) and MPII
+%     (PCKh@0.5 = 92.3) at the time; ~28 GFLOPs (W32) -- comparable to Hourglass.
+%   - Method family: feeds downstream tasks (segmentation, detection) via
+%     HRNetV2; in our story, HRNet provides the *backbone* that later HMR
+%     successors (e.g., PyMAF \cite{zhang2021pymaf}) adopt to lift 2D features
+%     into 3D mesh regression.
+%   - Limitation: top-down -- requires a person detector; multi-person scenes
+%     incur per-instance crops.
+\textit{[Placeholder] Cover (i) the parallel multi-resolution architecture and
+why preserving high-resolution features beats encoder--decoder recoveries,
+(ii) the repeated multi-scale fusion mechanism, (iii) COCO/MPII SOTA numbers,
+(iv) top-down dependency on an external detector.}
 
-\subsubsection{Methodology}
-the core methodologies,
+\subsection{HMR: End-to-end Recovery of Human Shape and Pose}
+% OWNER: Yiqiao | BUDGET: ~0.30 page | TODO: write 5/6, finalize 5/7
+% Talking points:
+%   - Goal: from a single RGB image, regress SMPL parameters (theta, beta) +
+%     weak-perspective camera in one forward pass.
+%   - Pipeline: ResNet-50 encoder -> iterative 3D regression module (initial
+%     mean params, three IEF residual updates) -> SMPL forward -> 3D joints +
+%     2D reprojection -> losses.
+%   - Key innovation: handles 3D ground-truth scarcity via an *adversarial
+%     prior* -- a discriminator trained on unpaired SMPL pose/shape datasets
+%     (CMU MoCap, MPI MOSH) penalises implausible bodies, removing the need
+%     for paired image-3D data on most training images.
+%   - Losses: 2D keypoint reprojection + (when available) 3D joint loss + adv.
+%   - Empirical: improves Human3.6M PA-MPJPE while relying mostly on in-the-
+%     wild 2D-only data (LSP, MPII, COCO).
+%   - Limitation: single-person assumption; ambiguity at extreme poses; SMPL
+%     ignores clothing/hair; recent successors (PyMAF, HMR2.0 \cite{goel20234dhumans})
+%     replace ResNet with HRNet/ViT and add feature alignment.
+\textit{[Placeholder] Describe (i) the SMPL parameter regression target and
+iterative error feedback, (ii) the adversarial body prior that sidesteps 3D
+labels, (iii) 2D reprojection plus 3D losses when available, (iv) Human3.6M
+results and the now-canonical line of successors (PyMAF, HMR\,2.0).}
 
-\subsubsection{Evaluation}
-the key empirical results and the main limitations
+% -----------------------------------------------------------------------------
+\section{Connections, Differences, and Limitations}
+% OWNER: Taijia | BUDGET: ~0.30 page | TODO: write 5/6, finalize 5/7
+% Talking points:
+%   - One comparison TABLE (input / output / supervision / arch / runtime / err).
+%   - Narrative thread: OpenPose answers "who-is-who", HRNet sharpens "where-
+%     exactly", HMR lifts to "what-in-3D". The natural composition --
+%     OpenPose multi-person -> per-person HRNet -> HMR per crop -- is now
+%     realised in modern systems (PyMAF, ROMP).
+%   - Shared limitations: occlusion, severe truncation, in-the-wild lighting,
+%     loose clothing, dynamic interaction.
 
-\subsection{End-to-end Recovery}
-the classical and recent contributions,
+% Suggested compact comparison table (uncomment & fill once prose is set):
+% \begin{table}[H]
+%   \centering\small
+%   \begin{tabular}{lccc}
+%     \toprule
+%     & OpenPose & HRNet & HMR \\
+%     \midrule
+%     Output    & 2D kpts (multi-person) & 2D heatmap (single)  & SMPL mesh + cam \\
+%     Strategy  & Bottom-up + PAFs       & Top-down high-res    & Iterative regression \\
+%     Sup.      & 2D kpts                & 2D kpts              & 2D + adv. + (3D opt.)\\
+%     Strength  & Realtime, $N$-invariant& SOTA 2D accuracy     & Single-shot 3D mesh\\
+%     Weakness  & Small-person AP        & Needs detector       & Single-person, no clothes\\
+%     \bottomrule
+%   \end{tabular}
+%   \caption{Three-method comparison on inputs, outputs, supervision, and trade-offs.}
+% \end{table}
+\textit{[Placeholder] Synthesise the three methods with one comparison table
+and a short narrative on how they compose into a 2D$\to$3D pipeline.}
 
-\subsubsection{Methodology}
-the core methodologies,
+% -----------------------------------------------------------------------------
+\section{Future Directions and Conclusion}
+% OWNER: Yiqiao | BUDGET: ~0.20 page | TODO: write 5/6
+% Talking points:
+%   - Foundation models (Sapiens \cite{khirodkar2024sapiens}) suggest that
+%     scale + diverse 2D supervision can subsume keypoint, segmentation,
+%     depth, and normal heads -- pointing to unified human representations.
+%   - Temporal coherence: VIBE \cite{kocabas2020vibe} extends HMR to video.
+%   - Photorealism: integrating SMPL priors with 3D Gaussian Splatting yields
+%     animatable avatars (recent line of work, 2024).
+%   - Open challenges: heavy occlusion in crowded scenes, dynamic clothing,
+%     and bridging laboratory accuracy with in-the-wild robustness.
+\textit{[Placeholder] Summarise the 2D$\to$3D progression and outline three
+future directions: foundation models (Sapiens), video extensions (VIBE), and
+SMPL\,+\,3DGS animatable avatars.}
 
-\subsubsection{Evaluation}
-the key empirical results and the main limitations
+% Working-model link (fill before submission):
+% \noindent\textbf{Code:} \url{https://github.com/<group>/<repo>}
 
-\section{Connection and Difference Evaluation}
-
-\section{Conclusion}
-Summarize the main takeaways from the literature and suggest promising future
-directions.
-
-% Keep the bibliography non-empty while drafting, even if some in-text cites
-% are temporarily removed.
+% -----------------------------------------------------------------------------
+% During drafting we only force the three CORE papers into the bibliography so
+% the skeleton stays within the 2-page limit. As §1/§2/§4/§5 prose lands and
+% real \cite calls appear, the supporting refs (SMPL, SMPLify, CPM, Hourglass,
+% Sapiens, VIBE, PyMAF, 4D-Humans) will be pulled in automatically -- they are
+% already defined in refs.bib so no further edits to that file are needed.
 \nocite{cao2019openpose,sun2019hrnet,kanazawa2018hmr}
 
+{\footnotesize
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
+}
 
 \end{document}

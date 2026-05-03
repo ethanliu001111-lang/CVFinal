@@ -1,0 +1,13 @@
+# Mac local development — minimum to run smoke test, edit code, write LaTeX.
+# Cannot run 4D-Humans (detectron2) or SMPLify-X (legacy stack) on Mac arm64.
+# Use Colab for full pipeline (see env_hrnet_hmr2.yml).
+
+torch>=2.1
+numpy<3
+scipy
+trimesh
+smplx
+matplotlib
+pillow
+imageio
+pandas
