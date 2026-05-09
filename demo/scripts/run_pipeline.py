@@ -145,8 +145,11 @@ def stage_render(images: list[Path], hrnet_res: dict, hmr2_res: dict, faces, out
         if idx is None: continue
         verts = verts_all[idx]
 
-        quad_plot(img, overlay, verts, faces, out_dir / f"quadplot_{img_path.stem}.png")
-        rotation_gif(verts, faces, out_dir / f"rotation_{img_path.stem}.gif", n_frames=15)
+        quad_plot(
+            img, overlay, verts, faces, out_dir / f"quadplot_{img_path.stem}.png",
+            verts_all=verts_all, cam_t_all=cam_t_all,
+        )
+        rotation_gif(verts, faces, out_dir / f"rotation_{img_path.stem}.gif", n_frames=24)
         print(f"  ✓ {img_path.name}")
 
 
