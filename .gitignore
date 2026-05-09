@@ -1,0 +1,84 @@
+# ─────────────── Python ───────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+# Re-add cleared notebook outputs by running:
+#   jupyter nbconvert --clear-output --inplace demo/notebooks/*.ipynb
+
+# ─────────────── LaTeX (LiteratureReview/) ───────────────
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.lof
+*.lot
+# Keep the compiled PDF for the submission deliverable
+!LiteratureReview/main.pdf
+# Office lock files
+~$*
+
+# ─────────────── Model checkpoints (license) ───────────────
+# Enforced both here and in demo/checkpoints/.gitignore
+*.pkl
+*.npz
+*.ckpt
+*.pth
+*.pt
+*.bin
+*.h5
+
+# ─────────────── Generated demo artifacts (regenerable) ───────────────
+demo/results/*.gif
+demo/results/*.mp4
+# Keep static demo PNGs and the .obj smoke artifact under version control
+# (they are small and act as visual regression baselines)
+!demo/results/*.png
+!demo/results/.gitkeep
+
+# Pipeline intermediate caches
+demo/results/hrnet_kpts.npz
+demo/results/hmr2_meshes.npz
+demo/results/2d_vis/
+
+# ─────────────── OS / IDE ───────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─────────────── Secrets ───────────────
+.env
+.env.local
+*.key
+*.pem
+
+# ─────────────── Project-specific scratch ───────────────
+results_smoke/
+scratch/
+tmp/

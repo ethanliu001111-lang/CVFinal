@@ -1,20 +1,108 @@
+% =============================================================================
+% References for Intro to CV Final Project — From 2D Pose to 3D Human Recovery
+% =============================================================================
+
+% --- Three core papers (assigned by the project) ----------------------------
+
 @article{cao2019openpose,
-  title   = {OpenPose: Realtime Multi-Person 2D Pose Estimation Using Part Affinity Fields},
+  title   = {{OpenPose}: Realtime Multi-Person {2D} Pose Estimation Using Part Affinity Fields},
   author  = {Cao, Zhe and Hidalgo, Gines and Simon, Tomas and Wei, Shih-En and Sheikh, Yaser},
   journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
-  year    = {2019}
+  volume  = {43},
+  number  = {1},
+  pages   = {172--186},
+  year    = {2019},
+  doi     = {10.1109/TPAMI.2019.2929257}
 }
 
 @inproceedings{sun2019hrnet,
   title     = {Deep High-Resolution Representation Learning for Human Pose Estimation},
   author    = {Sun, Ke and Xiao, Bin and Liu, Dong and Wang, Jingdong},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {5693--5703},
   year      = {2019}
 }
 
 @inproceedings{kanazawa2018hmr,
   title     = {End-to-End Recovery of Human Shape and Pose},
   author    = {Kanazawa, Angjoo and Black, Michael J. and Jacobs, David W. and Malik, Jitendra},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {7122--7131},
   year      = {2018}
+}
+
+% --- Background: parametric body models -------------------------------------
+
+@article{loper2015smpl,
+  title   = {{SMPL}: A Skinned Multi-Person Linear Model},
+  author  = {Loper, Matthew and Mahmood, Naureen and Romero, Javier and
+             Pons-Moll, Gerard and Black, Michael J.},
+  journal = {ACM Transactions on Graphics (Proc.\ SIGGRAPH Asia)},
+  volume  = {34},
+  number  = {6},
+  pages   = {248:1--248:16},
+  year    = {2015}
+}
+
+@inproceedings{bogo2016smplify,
+  title     = {Keep It {SMPL}: Automatic Estimation of {3D} Human Pose and Shape from a Single Image},
+  author    = {Bogo, Federica and Kanazawa, Angjoo and Lassner, Christoph and
+               Gehler, Peter and Romero, Javier and Black, Michael J.},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  pages     = {561--578},
+  year      = {2016}
+}
+
+% --- Background: 2D heatmap-based pose lineage -------------------------------
+
+@inproceedings{wei2016cpm,
+  title     = {Convolutional Pose Machines},
+  author    = {Wei, Shih-En and Ramakrishna, Varun and Kanade, Takeo and Sheikh, Yaser},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {4724--4732},
+  year      = {2016}
+}
+
+@inproceedings{newell2016hourglass,
+  title     = {Stacked Hourglass Networks for Human Pose Estimation},
+  author    = {Newell, Alejandro and Yang, Kaiyu and Deng, Jia},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  pages     = {483--499},
+  year      = {2016}
+}
+
+% --- Future directions ------------------------------------------------------
+
+@inproceedings{khirodkar2024sapiens,
+  title     = {{Sapiens}: Foundation for Human Vision Models},
+  author    = {Khirodkar, Rawal and Bagautdinov, Timur and
+               Martinez, Julieta and Zhaoen, Su and James, Austin and
+               Selednik, Peter and Anderson, Stuart and Saito, Shunsuke},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  year      = {2024}
+}
+
+@inproceedings{kocabas2020vibe,
+  title     = {{VIBE}: Video Inference for Human Body Pose and Shape Estimation},
+  author    = {Kocabas, Muhammed and Athanasiou, Nikos and Black, Michael J.},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {5253--5263},
+  year      = {2020}
+}
+
+@inproceedings{zhang2021pymaf,
+  title     = {{PyMAF}: 3D Human Pose and Shape Regression with Pyramidal Mesh Alignment Feedback Loop},
+  author    = {Zhang, Hongwen and Tian, Yating and Zhou, Xinchi and
+               Ouyang, Wanli and Liu, Yebin and Wang, Limin and Sun, Zhenan},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  pages     = {11446--11456},
+  year      = {2021}
+}
+
+@inproceedings{goel20234dhumans,
+  title     = {Humans in {4D}: Reconstructing and Tracking Humans with Transformers},
+  author    = {Goel, Shubham and Pavlakos, Georgios and Rajasegaran, Jathushan and
+               Kanazawa, Angjoo and Malik, Jitendra},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2023}
 }

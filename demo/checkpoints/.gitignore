@@ -1,0 +1,4 @@
+# Never commit large model checkpoints
+*
+!.gitignore
+!DOWNLOAD.md
