@@ -30,7 +30,7 @@ The challenges of real-time multi-person 2D estimation lie in the significant
 uncertainty caused by the unknown number of people in the image, spatial
 interference due to interactions and overlaps between people, and the
 substantial increase in spatial complexity as the number of people increases.
-Cao et al.'s Part Affinity Fields (PAFs) \cite{cao2019openpose} effectively
+The part affinity fields (PAFs) of Cao et al. \cite{cao2019openpose} effectively
 address these issues. Compared to traditional Top-Down methods (reusing
 single-person pose assessment techniques) and traditional Bottom-up
 techniques, they achieve efficient identification and reconstruction of
@@ -39,22 +39,21 @@ through PAFs (a set of $2\mathrm{D}$ vector fields) and Confidence Maps (a set o
 confidence maps of human body parts) \cite{cao2019openpose}.
 
 \subsubsection{Methodology}
-The entire system takes $w \times h$ color images as input.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\columnwidth]{figure1.png}
-    \caption{Multi-stage prediction network used in OpenPose.}
+    \caption{Multi-stage prediction network used in OpenPose.\cite{cao2019openpose}}
     \label{fig:openpose-pipeline}
 \end{figure}
 
-As shown in Figure~\ref{fig:openpose-pipeline}, a multi-stage prediction
-network is used for convolutional neural networks (CNNs)
-\cite{cao2019openpose}. Based on refining PAF (the degree of correlation
+The entire system takes $w \times h$ color images as input.As shown in Figure~\ref{fig:openpose-pipeline}, a multi-stage prediction
+network is used for convolution neural networks (CNN)
+\cite{cao2019openpose}. Based on the refinement of PAF (the degree of correlation
 between individual human limbs), Gaussian peak convolution is used to further
 convolve the confidence map (the location of individual human parts)
-\cite{cao2019openpose}. By changing the $7 \times 7$ convolutional kernel to
-three consecutive $3 \times 3$ convolutional kernels, the operation number is
+\cite{cao2019openpose}. By changing the $7 \times 7$ convolution kernel to
+three consecutive $3 \times 3$ convolution kernels, the operation number is
 effectively reduced from $2 \times 7^{2} - 1 = 97$ to $51$
 \cite{cao2019openpose}. Finally, a spatially
 weighted loss function is used to address the problem of not being able to
@@ -65,7 +64,17 @@ is used to match local data to solve the global problem
 \cite{cao2019openpose}.
 
 \subsubsection{Evaluation}
-the key empirical results and the main limitations
+The key results are shown below.
+\begin{itemize}
+    \item OpenPose achieve a better solution with less operation time than previous ones, through multi-stage CNN, PAF, spanning tree skeleton and greedy inferring.
+    \item OpenPose fills the gap in the lack of a good foot dataset and demonstrates that good foot recognition can enhance the overall recognition accuracy without reducing body precision.
+    \item OpenPose proves that PAF refinement is more significant than confidence map refinement in the aspect of improving the accuracy of the multi-person 2D estimation.
+\end{itemize}
+The key limits are shown below.
+\begin{itemize}
+    \item 
+
+\end{itemize}
 
 \subsection{Deep High-Resolution Representation Learning}
 the classical and recent contributions,
