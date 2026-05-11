@@ -71,11 +71,6 @@ bash demo/scripts/make_extras.sh
 Outputs land under [`demo/showcase/`](demo/showcase/). Full instructions in
 [`demo/README.md`](demo/README.md).
 
-## Authors
-
-- **Yiqiao Liu** — OpenPose §3.1 + HMR §3.3 + Future Directions §5; slides + live talk on those papers
-- **Taijia Liang** — Intro/Background §1–§2 + HRNet §3.2 + Comparison §4; demo extension; slides for connecting narrative + demo
-
 ## License & third-party models
 
 This repository is MIT-licensed (see [`LICENSE`](LICENSE)). The SMPL, SMPL-X,
