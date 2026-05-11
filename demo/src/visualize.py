@@ -1,9 +1,4 @@
-"""Mesh + keypoint visualization helpers (pyrender on Linux GPU).
-
-Uses pyrender with EGL backend for solid shaded SMPL rendering.
-Falls back to matplotlib software render only if pyrender import fails
-(e.g. on Mac arm64 without OSMesa).
-"""
+"""SMPL mesh + 2D keypoint visualization (pyrender preferred, matplotlib fallback)."""
 from __future__ import annotations
 
 import os
@@ -14,7 +9,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import matplotlib
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -26,50 +20,43 @@ except Exception:
     _HAVE_PYRENDER = False
 
 
-# ────────────────────────── pyrender path (preferred) ──────────────────────────
-
 def _create_raymond_lights() -> List["pyrender.Node"]:
-    """3 raymond lights. Ported from 4D-Humans/hmr2/utils/renderer.py."""
+    """Three directional lights — same recipe as 4D-Humans/hmr2/utils/renderer.py."""
     thetas = np.pi * np.array([1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0])
     phis = np.pi * np.array([0.0, 2.0 / 3.0, 4.0 / 3.0])
     nodes = []
     for phi, theta in zip(phis, thetas):
-        xp = np.sin(theta) * np.cos(phi)
-        yp = np.sin(theta) * np.sin(phi)
-        zp = np.cos(theta)
-        z = np.array([xp, yp, zp]); z = z / np.linalg.norm(z)
+        z = np.array([np.sin(theta) * np.cos(phi),
+                      np.sin(theta) * np.sin(phi),
+                      np.cos(theta)])
+        z = z / np.linalg.norm(z)
         x = np.array([-z[1], z[0], 0.0])
         if np.linalg.norm(x) == 0:
             x = np.array([1.0, 0.0, 0.0])
         x = x / np.linalg.norm(x)
         y = np.cross(z, x)
-        matrix = np.eye(4)
-        matrix[:3, :3] = np.stack([x, y, z], axis=1)
+        m = np.eye(4); m[:3, :3] = np.stack([x, y, z], axis=1)
         nodes.append(pyrender.Node(
             light=pyrender.DirectionalLight(color=np.ones(3), intensity=1.0),
-            matrix=matrix,
+            matrix=m,
         ))
     return nodes
 
 
 def _smpl_to_world(verts: np.ndarray) -> np.ndarray:
-    """Flip 180° around X to convert SMPL camera frame → pyrender world frame."""
     R = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float32)
     return verts @ R.T
 
 
 def render_mesh_pyrender(
-    verts: np.ndarray,
-    faces: np.ndarray,
-    *,
+    verts: np.ndarray, faces: np.ndarray, *,
     rot_y_deg: float = 0.0,
     img_size: Tuple[int, int] = (512, 512),
     mesh_color: Tuple[float, float, float] = (0.95, 0.85, 0.70),
     bg_color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 0.0),
 ) -> np.ndarray:
-    """Render a single SMPL mesh on a clean background. Returns RGBA uint8 (H, W, 4)."""
+    """Render a single SMPL mesh on a clean background (auto-framed)."""
     v = _smpl_to_world(np.asarray(verts, dtype=np.float32))
-
     if rot_y_deg != 0.0:
         c, s = np.cos(np.radians(rot_y_deg)), np.sin(np.radians(rot_y_deg))
         Ry = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float32)
@@ -77,8 +64,7 @@ def render_mesh_pyrender(
 
     mesh_tri = trimesh.Trimesh(vertices=v, faces=faces, process=False)
     material = pyrender.MetallicRoughnessMaterial(
-        metallicFactor=0.0, roughnessFactor=0.7,
-        alphaMode="OPAQUE",
+        metallicFactor=0.0, roughnessFactor=0.7, alphaMode="OPAQUE",
         baseColorFactor=(*mesh_color, 1.0),
     )
     mesh_pr = pyrender.Mesh.from_trimesh(mesh_tri, material=material)
@@ -86,7 +72,6 @@ def render_mesh_pyrender(
     scene = pyrender.Scene(bg_color=list(bg_color), ambient_light=(0.35, 0.35, 0.35))
     scene.add(mesh_pr)
 
-    # Auto-frame: place camera along +Z so the mesh fills the frame
     bb_min, bb_max = v.min(0), v.max(0)
     center = (bb_min + bb_max) / 2.0
     extent = float((bb_max - bb_min).max())
@@ -94,10 +79,8 @@ def render_mesh_pyrender(
     cam_distance = (extent / 2.0) / np.tan(yfov / 2.0) * 1.25
     cam_pose = np.eye(4)
     cam_pose[:3, 3] = [center[0], center[1], center[2] + cam_distance]
-    aspect = img_size[0] / img_size[1]
-    camera = pyrender.PerspectiveCamera(yfov=yfov, aspectRatio=aspect)
+    camera = pyrender.PerspectiveCamera(yfov=yfov, aspectRatio=img_size[0] / img_size[1])
     scene.add(camera, pose=cam_pose)
-
     for node in _create_raymond_lights():
         scene.add_node(node)
 
@@ -115,50 +98,46 @@ def render_mesh_overlay_pyrender(
     *,
     focal_length: float = 5000.0,
     mesh_colors: Optional[List[Tuple[float, float, float]]] = None,
+    with_background: bool = True,
+    view_rot_y_deg: float = 0.0,
 ) -> np.ndarray:
-    """Composite SMPL mesh(es) onto the original input image using HMR2 cam_t.
+    """Composite multiple SMPL meshes onto a shared image-frame camera.
 
-    Implements the same projection convention as 4D-Humans' Renderer.__call__:
-    `camera_translation[0] *= -1` then a 180°-X mesh flip.
+    Convention matches 4D-Humans' multi-person renderer:
+      v_world = (v_smpl + cam_t)  rotated 180° around X.
+    cam_t must be in full-image frame (run_pipeline.stage_hmr2 converts it).
+    `view_rot_y_deg` spins each mesh in place around its own Y axis (for side views).
     """
     bg = np.asarray(background_rgb)
     H, W = bg.shape[:2]
-    bg_f = bg.astype(np.float32) / 255.0 if bg.dtype != np.float32 else bg.copy()
+    bg_f = (bg.astype(np.float32) / 255.0 if bg.dtype != np.float32 else bg.copy()) \
+           if with_background else np.ones((H, W, 3), dtype=np.float32)
 
     scene = pyrender.Scene(bg_color=[0, 0, 0, 0], ambient_light=(0.35, 0.35, 0.35))
-    flip_x = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float32)
-
     palette = [
         (0.95, 0.85, 0.70), (0.70, 0.85, 0.95),
         (0.85, 0.95, 0.70), (0.95, 0.70, 0.85),
         (0.70, 0.95, 0.85), (0.85, 0.70, 0.95),
     ]
-    # Each person has their own cam_t; pyrender supports only one camera per
-    # scene, so we instead translate each mesh by (-cam_t) so they line up with
-    # a single camera placed at the origin (looking down -Z).
+    rot180_x = trimesh.transformations.rotation_matrix(np.radians(180), [1, 0, 0])
+    rot_y = (trimesh.transformations.rotation_matrix(np.radians(view_rot_y_deg), [0, 1, 0])
+             if view_rot_y_deg else None)
     for i, (verts, cam_t) in enumerate(zip(verts_list, cam_t_list)):
-        v = np.asarray(verts, dtype=np.float32) @ flip_x.T
-        cam_t_arr = np.asarray(cam_t, dtype=np.float32).copy()
-        cam_t_arr[0] *= -1.0  # 4D-Humans renderer convention
-        # Translate verts so the mesh ends up in front of a camera at the origin.
-        v = v + cam_t_arr[None, :]
+        v_local = np.asarray(verts, dtype=np.float32)
+        if rot_y is not None:
+            v_local = (v_local @ rot_y[:3, :3].T).astype(np.float32)
+        v = v_local + np.asarray(cam_t, dtype=np.float32)[None, :]
         col = (mesh_colors or palette)[i % len(palette)]
         mesh_tri = trimesh.Trimesh(vertices=v, faces=faces, process=False)
+        mesh_tri.apply_transform(rot180_x)
         material = pyrender.MetallicRoughnessMaterial(
             metallicFactor=0.0, roughnessFactor=0.7, alphaMode="OPAQUE",
             baseColorFactor=(*col, 1.0))
-        mesh_pr = pyrender.Mesh.from_trimesh(mesh_tri, material=material)
-        scene.add(mesh_pr)
+        scene.add(pyrender.Mesh.from_trimesh(mesh_tri, material=material))
 
-    # Camera at world origin looking down -Z; pyrender flips Y for image
-    # coordinates internally, but `IntrinsicsCamera` follows OpenCV convention
-    # (Y down) — match that with a Y-axis-180 rotation on the camera pose.
-    cam_pose = np.eye(4)
-    cam_pose[:3, :3] = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float32)
-    camera = pyrender.IntrinsicsCamera(
-        fx=focal_length, fy=focal_length, cx=W / 2.0, cy=H / 2.0, zfar=1e12,
-    )
-    scene.add(camera, pose=cam_pose)
+    camera = pyrender.IntrinsicsCamera(fx=focal_length, fy=focal_length,
+                                        cx=W / 2.0, cy=H / 2.0, zfar=1e12)
+    scene.add(camera, pose=np.eye(4))
     for node in _create_raymond_lights():
         scene.add_node(node)
 
@@ -172,10 +151,7 @@ def render_mesh_overlay_pyrender(
     return (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
 
 
-# ────────────────────────── matplotlib fallback (Mac / no GPU) ──────────────────────────
-
 def smpl_y_up_to_matplotlib_z_up(verts: np.ndarray) -> np.ndarray:
-    """Convert SMPL Y-up vertices to matplotlib's Z-up axis convention."""
     verts = np.asarray(verts)
     return np.stack([verts[:, 0], verts[:, 2], verts[:, 1]], axis=-1)
 
@@ -195,13 +171,12 @@ def render_mesh_matplotlib(
     color: str = "steelblue", figsize: Tuple[int, int] = (6, 6),
     face_stride: int = 1,
 ) -> np.ndarray:
-    """Software 3D mesh render — slow, only used as Mac fallback."""
+    """Software fallback for environments without pyrender / EGL."""
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     v = _smpl_y_up_to_matplotlib_z_up(verts)
     fig = plt.figure(figsize=figsize, dpi=120)
     ax = fig.add_subplot(111, projection="3d")
-    f = faces[::face_stride]
-    poly = Poly3DCollection(v[f], alpha=0.9, facecolor=color, edgecolor="none")
+    poly = Poly3DCollection(v[faces[::face_stride]], alpha=0.9, facecolor=color, edgecolor="none")
     ax.add_collection3d(poly)
     x0, y0, z0, x1, y1, z1 = _viewbox(v)
     ax.set_xlim(x0, x1); ax.set_ylim(y0, y1); ax.set_zlim(z0, z1)
@@ -214,13 +189,11 @@ def render_mesh_matplotlib(
 
 
 def _render_view(verts, faces, *, rot_y_deg: float, img_size=(512, 512)) -> np.ndarray:
-    """Backend-aware mesh render — pyrender if available, else matplotlib."""
     if _HAVE_PYRENDER:
         return render_mesh_pyrender(verts, faces, rot_y_deg=rot_y_deg, img_size=img_size)
-    return render_mesh_matplotlib(verts, faces, azim=rot_y_deg, elev=10, figsize=(img_size[0]/120, img_size[1]/120))
+    return render_mesh_matplotlib(verts, faces, azim=rot_y_deg, elev=10,
+                                   figsize=(img_size[0]/120, img_size[1]/120))
 
-
-# ────────────────────────── public API (used by run_pipeline.py) ──────────────────────────
 
 def quad_plot(
     input_rgb: np.ndarray,
@@ -234,22 +207,34 @@ def quad_plot(
     verts_all: Optional[np.ndarray] = None,
     cam_t_all: Optional[np.ndarray] = None,
 ) -> Path:
-    """2×2 grid: Input | 2D overlay // 3D-overlaid-on-input | 3D side.
+    """2×2 grid: Input | HRNet 2D // HMR front | HMR side.
 
-    `verts_all`+`cam_t_all` (optional, multi-person): if given, the bottom-left
-    panel will overlay all detected meshes on the input image. Otherwise falls
-    back to a clean front view of the single `verts`.
+    If verts_all/cam_t_all is given for multi-person, both mesh panels show all
+    detections (front + side rotated in place); else single-person renders.
     """
-    H, W = input_rgb.shape[:2]
-    front = _render_view(verts, faces, rot_y_deg=0.0,  img_size=(640, 640))
-    side  = _render_view(verts, faces, rot_y_deg=90.0, img_size=(640, 640))
-    front_title = f"{title_prefix}HMR 2.0 (Front)"
+    multi = (verts_all is not None and cam_t_all is not None
+             and len(verts_all) > 1 and _HAVE_PYRENDER)
+    if multi:
+        n = len(verts_all)
+        verts_list = [verts_all[i] for i in range(n)]
+        cam_t_list = [cam_t_all[i] for i in range(n)]
+        front = render_mesh_overlay_pyrender(input_rgb, verts_list, cam_t_list, faces,
+                                              with_background=False)
+        side = render_mesh_overlay_pyrender(input_rgb, verts_list, cam_t_list, faces,
+                                             with_background=False, view_rot_y_deg=90.0)
+        front_title = f"{title_prefix}HMR 2.0 ({n} persons · front)"
+        side_title  = f"{title_prefix}HMR 2.0 ({n} persons · side)"
+    else:
+        front = _render_view(verts, faces, rot_y_deg=0.0,  img_size=(640, 640))
+        side  = _render_view(verts, faces, rot_y_deg=90.0, img_size=(640, 640))
+        front_title = f"{title_prefix}HMR 2.0 (Front)"
+        side_title  = f"{title_prefix}HMR 2.0 (Side)"
 
     fig, ax = plt.subplots(2, 2, figsize=(12, 12), dpi=120)
-    ax[0, 0].imshow(input_rgb);  ax[0, 0].set_title(f"{title_prefix}Input");          ax[0, 0].axis("off")
-    ax[0, 1].imshow(overlay_2d); ax[0, 1].set_title(f"{title_prefix}HRNet 2D");       ax[0, 1].axis("off")
-    ax[1, 0].imshow(front);      ax[1, 0].set_title(front_title);                     ax[1, 0].axis("off")
-    ax[1, 1].imshow(side);       ax[1, 1].set_title(f"{title_prefix}HMR 2.0 (Side)"); ax[1, 1].axis("off")
+    ax[0, 0].imshow(input_rgb);  ax[0, 0].set_title(f"{title_prefix}Input");    ax[0, 0].axis("off")
+    ax[0, 1].imshow(overlay_2d); ax[0, 1].set_title(f"{title_prefix}HRNet 2D"); ax[0, 1].axis("off")
+    ax[1, 0].imshow(front);      ax[1, 0].set_title(front_title);               ax[1, 0].axis("off")
+    ax[1, 1].imshow(side);       ax[1, 1].set_title(side_title);                ax[1, 1].axis("off")
 
     out_png = Path(out_png)
     out_png.parent.mkdir(parents=True, exist_ok=True)
@@ -260,18 +245,14 @@ def quad_plot(
 
 
 def rotation_gif(
-    verts: np.ndarray,
-    faces: np.ndarray,
-    out_gif: str | Path,
-    *,
-    n_frames: int = 24,
-    fps: int = 12,
-    img_size: Tuple[int, int] = (512, 512),
+    verts: np.ndarray, faces: np.ndarray, out_gif: str | Path, *,
+    n_frames: int = 24, fps: int = 12, img_size: Tuple[int, int] = (512, 512),
 ) -> Path:
-    """Render a 360° rotating mesh as an animated GIF."""
+    """Render a 360° rotating SMPL mesh as an animated GIF."""
     import imageio.v3 as iio
     angles = np.linspace(0, 360, n_frames, endpoint=False)
-    frames = [_render_view(verts, faces, rot_y_deg=float(a), img_size=img_size)[..., :3] for a in angles]
+    frames = [_render_view(verts, faces, rot_y_deg=float(a), img_size=img_size)[..., :3]
+              for a in angles]
     out_gif = Path(out_gif)
     out_gif.parent.mkdir(parents=True, exist_ok=True)
     iio.imwrite(out_gif, frames, duration=1000 // fps, loop=0)
@@ -279,7 +260,7 @@ def rotation_gif(
 
 
 def pick_center_person(verts_all: np.ndarray, cam_t_all: np.ndarray, img_shape) -> Optional[int]:
-    """Return idx of detection whose camera projection is closest to image center."""
+    """Pick the detection whose cam_t lies closest to the image center (for side view)."""
     if len(verts_all) == 0:
         return None
     if len(verts_all) == 1:

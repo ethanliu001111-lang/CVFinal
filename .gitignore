@@ -82,3 +82,11 @@ Thumbs.db
 results_smoke/
 scratch/
 tmp/
+
+# ─────────────── Vendored upstream repos ───────────────
+# Editable installs of 4D-Humans (HMR 2.0) and PHALP live under third_party/.
+# We vendor a trimmed copy (code + LICENSE only, no upstream demo assets)
+# so the demo is reproducible from a single git clone. Patches we applied
+# travel with the code.
+third_party/**/__pycache__/
+third_party/**/*.egg-info/

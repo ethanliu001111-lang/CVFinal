@@ -1,159 +1,104 @@
-# Demo — From 2D Pose to 3D Human Recovery
+# Demo — From 2D Keypoints to 4D Humans
 
-Working-model accompaniment to the literature review report (Intro to CV, Spring 2026).
-
-## TL;DR
+Working pipeline for the *Intro to Computer Vision* (Spring 2026) final project.
 
 ```
-Input image → ViTDet (person bbox) → HRNet-W48 (2D keypoints) → 4D-Humans HMR 2.0 (3D SMPL mesh)
-                                                                        ↓
-                                                       quad-plot + 360° GIF + runtime table
+single image → ViTDet-H bbox → HRNet-W48 (2D kpts) → HMR 2.0 (SMPL mesh)        [image path]
+video        → PHALP (HMR 2.0 + tracking)            → per-track 4D meshes       [video path]
 ```
-
-Empirically validates HMR (CVPR 2018)'s central claim: **single-pass regression
-delivers ~600× speedup over iterative SMPLify optimization** at comparable
-visual quality.
 
 ## Layout
 
 ```
 demo/
-├── src/                              # Reusable pipeline modules
-│   ├── smpl_forward.py               #   SMPL Eq.(1) narrated wrapper
-│   ├── hrnet_2d.py                   #   MMPose HRNet inference
-│   ├── hmr2_demo_wrapper.py          #   4D-Humans inference (Colab only)
-│   ├── smplifyx_cli.py               #   STRETCH: SMPLify-X CLI wrapper
-│   ├── compare.py                    #   Procrustes-aligned joint MPJPE + tables
-│   └── visualize.py                  #   matplotlib quad-plot + GIF + multi-person guard
-├── notebooks/
-│   ├── 00_mac_smoke_test.ipynb       # Run locally to verify SMPL-X loads (~10 s)
-│   ├── 01_main_pipeline.ipynb        # ★ MAIN demo — run on Colab (~7 s for 5 images)
-│   ├── 02_smplifyx_stretch.ipynb     # Stretch goal, hard cutoff 5/5 EOD
-│   └── 03_smpl_explain.ipynb         # Pedagogical SMPL Eq.(1) walkthrough
-├── envs/
-│   ├── requirements_local_mac.txt    # Mac dev: torch / smplx / trimesh / matplotlib
-│   ├── env_hrnet_hmr2.yml            # Colab main: + mmpose / 4D-Humans / chumpy
-│   └── env_smplifyx.yml              # Stretch: PyTorch 1.x for SMPLify-X compat
 ├── scripts/
-│   ├── setup_smpl_paths.sh           # Create model symlinks (one-time)
-│   └── run_smoke_test.sh             # Local smoke test
-├── checkpoints/
-│   ├── .gitignore                    # Never commit binaries (license)
-│   └── DOWNLOAD.md                   # Registration + download guide
-├── test_images/README.md             # 5 CC0 test images TODO
-├── results/                          # Generated artifacts (some kept in repo)
-└── docs/pipeline_diagram.png         # Goes into report §3
+│   ├── run_pipeline.py         # main CLI: ViTDet → HRNet → HMR 2.0 → quadplot/GIF
+│   ├── setup_smpl_paths.sh     # one-time: wire SMPL_NEUTRAL.pkl symlinks
+│   ├── make_extras.sh          # regenerate all extras + PHALP showcase
+│   └── extras/                 # pose similarity / reprojection / mini-SMPLify / tennis 4D
+├── src/                        # MODEL_ROOT + hrnet_2d + visualize + compare
+├── checkpoints/DOWNLOAD.md     # SMPL/SMPL-X registration + download instructions
+├── test_images/                # 4 CC0 photos covering single/multi-person + occlusion
+├── test_videos/tennis.mp4      # 8.6 s clip for the video path
+├── results/                    # intermediate caches (gitignored)
+└── showcase/                   # rendered outputs (committed for review)
+    ├── 2d_vis/                 # HRNet keypoint overlays
+    ├── quadplot_*.png          # 2×2 grids (input | 2D | mesh front | mesh side)
+    ├── rotation_*.gif          # 24-frame 360° SMPL turntable
+    ├── runtime_table.{csv,tex}
+    ├── extras/                 # mini-SMPLify, reprojection, pose-similarity, tennis joints
+    └── video/                  # PHALP overlay frames + 5 s clip
 ```
 
-## Quick start (Mac local)
+## One-time setup
 
 ```bash
-# 1. Clone, enter the worktree
-cd <repo>
+git clone git@github.com:ethanliu001111-lang/CVFinal.git && cd CVFinal
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt  # or install per the report appendix
+pip install -e third_party/4D-Humans -e third_party/PHALP
 
-# 2. Create a venv at repo root (already exists if you've followed plan v3)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r demo/envs/requirements_local_mac.txt
-
-# 3. Set up SMPL/SMPL-X symlinks (after registering at smpl.is.tue.mpg.de)
+# Register at smpl.is.tue.mpg.de, download the body models, then:
+export CV_MODEL_ROOT=/abs/path/to/your/registered/models
 bash demo/scripts/setup_smpl_paths.sh
-
-# 4. Smoke test (< 10 s)
-jupyter notebook demo/notebooks/00_mac_smoke_test.ipynb
-# or, programmatically:
-python -c "from demo.src.smpl_forward import export_tpose_obj; export_tpose_obj('demo/results/tpose_smplx.obj', model_type='smplx')"
 ```
 
-## Full pipeline (Linux GPU server — preferred)
+Tested on **Python 3.12, CUDA 13, PyTorch 2.11, RTX PRO 6000 (sm_120)**. Older
+CUDA 11.8+ with ≥ 8 GB VRAM works after a wheel swap.
 
-Run on any Linux machine with an NVIDIA GPU (≥ 8 GB VRAM, CUDA 11.8 driver).
-This is the recommended path: more reliable than Colab, no quota limits,
-checkpoints persist between runs.
+## Image path
 
 ```bash
-# ─── On your laptop ───
-bash demo/scripts/sync_to_server.sh user@gpu-server.example.edu ~/cv-final --with-models
-
-# ─── On the server ───
-ssh user@gpu-server.example.edu
-cd ~/cv-final
-bash demo/scripts/setup_linux_server.sh        # ~10 min, one-time
-source ~/.venv/cv-final/bin/activate
-CV_MODEL_ROOT=$(realpath ../model) bash demo/scripts/setup_smpl_paths.sh
-
-# Run the pipeline (CLI, no Jupyter needed)
-python demo/scripts/run_pipeline.py demo/test_images/*.jpg \
-    --out-dir demo/results --device cuda --batch-size 1
-
-# ─── Pull results back to your laptop ───
-rsync -avz user@gpu-server:~/cv-final/demo/results/ ./demo/results/
+python demo/scripts/run_pipeline.py demo/test_images/*.jpg --device cuda
 ```
 
-Optional — interactive Jupyter on the server (handy for debugging cell by cell):
+Writes to:
+- `demo/showcase/2d_vis/<stem>.jpg` — HRNet 2D overlay (all detected people)
+- `demo/showcase/quadplot_<stem>.png` — input | 2D | mesh front | mesh side
+- `demo/showcase/rotation_<stem>.gif` — 360° rotating SMPL mesh
+- `demo/showcase/runtime_table.{csv,tex}` — per-image ViTDet/HRNet/HMR2 timing
+- `demo/results/{vitdet_boxes,hrnet_kpts,hmr2_meshes}.npz` — caches (gitignored)
+
+Flags:
+- `--skip-2d` / `--skip-3d` reuse cached HRNet / HMR outputs (re-render only)
+- `--score-thresh` lowers ViTDet's person score gate (default 0.5)
+- `--device cpu` runs on CPU (~10× slower)
+
+## Video path (PHALP)
 
 ```bash
-# On YOUR laptop:
-bash demo/scripts/start_remote_jupyter.sh user@gpu-server.example.edu
-# → opens an SSH tunnel and prints the token URL.
-# Browse to http://localhost:8888 with that token.
+python -m phalp.track \
+    video.source=demo/test_videos/tennis.mp4 \
+    video.output_dir=demo/results/tennis_phalp \
+    video.end_frame=1300
 ```
 
-### Server hardware sanity-check
+Writes per-frame tracking pickle to `demo/results/tennis_phalp/results/demo_tennis.pkl`
+and a per-track-overlay video to `demo/results/tennis_phalp/PHALP_tennis.mp4`.
+`make_extras.sh` (below) copies the highlights into `demo/showcase/video/`.
 
-| Resource | Minimum | Recommended | What it gates |
-|---|---|---|---|
-| GPU VRAM | 8 GB | 16 GB+ | 4D-Humans ViT-L peak ~3 GB; HRNet ~0.5 GB |
-| CUDA driver | 11.8 | 12.x | PyTorch 2.1 wheel |
-| CPU RAM | 16 GB | 32 GB | mesh tensors + numpy buffers |
-| Disk | 20 GB | 30 GB | models (4.5 GB) + venv (3 GB) + results (~50 MB) + 4D-Humans repo |
-| Python | 3.10 | 3.10 / 3.11 | matched against PyTorch wheel |
+## Extras + showcase regeneration
 
-If you only have CPU on the server, the pipeline still runs (~20× slower).
-Pass `--device cpu` to `run_pipeline.py`; expect ~3 minutes for 5 images.
+```bash
+bash demo/scripts/make_extras.sh
+```
 
----
+Runs all four extras (pose-similarity heatmap, reprojection overlay, tennis
+4D trajectory, mini-SMPLify), pulls four sample frames out of `PHALP_tennis.mp4`,
+and produces a 5 s clip — everything lands under `demo/showcase/`.
 
-## Full pipeline (Colab — fallback)
+## Reproducibility checklist
 
-1. Upload **5 test images** to `/content/test_images/` on Colab (or sync from
-   Drive).
-2. Make sure SMPL `.pkl` and SMPL-X `.npz` are in your Drive at
-   `MyDrive/smpl/` and `MyDrive/smplx/` respectively.
-3. Open `notebooks/01_main_pipeline.ipynb` in Colab.
-4. Runtime → Change runtime type → **GPU (T4)**.
-5. **Run all** (~3 min for setup, ~7 s for 5-image inference).
-6. Download:
-   - `results/quadplot_*.png`
-   - `results/rotation_*.gif`
-   - `results/runtime_table.csv` and `.tex`
-7. Final 30 s `full_demo.mp4` is assembled from these — see slide 11 of the
-   presentation deck.
+- Set `CV_MODEL_ROOT` before any script — `demo/src/__init__.py` falls back to
+  `<repo>/model` only if the env var is unset.
+- Caches in `demo/results/` are version-pinned to the source images. Wipe them
+  (`rm -rf demo/results/*.npz`) after editing `test_images/` or rotating SMPL assets.
+- All scripts resolve paths relative to the repo root via
+  `Path(__file__).resolve().parents[...]`; no absolute paths are baked in.
 
-## Validation hierarchy
+## License
 
-| Status     | Layer                           | Where verified |
-|------------|---------------------------------|----------------|
-| ✅ Verified | Mac: SMPL-X load + forward     | `notebooks/00_mac_smoke_test.ipynb` |
-| ✅ Verified | matplotlib mesh rendering     | `demo/results/smplx_4poses.png`     |
-| ⏳ Pending  | Linux: HRNet-W48 inference    | `python demo/scripts/run_pipeline.py` Stage 1 |
-| ⏳ Pending  | Linux: 4D-Humans HMR 2.0      | `python demo/scripts/run_pipeline.py` Stage 2 |
-| ⏳ Pending  | Linux: 5-image full run       | 5/4–5/5 P1 task |
-| 🌟 Stretch  | SMPLify-X agreement metric    | `notebooks/02_smplifyx_stretch.ipynb` (5/5 EOD cutoff) |
-
-## License & redistribution
-
-- **Code in this directory**: MIT (your choice; matches 4D-Humans).
-- **SMPL / SMPL-X / VPoser**: non-commercial academic. Each user must
-  register independently.
-- **Never** commit `.pkl` / `.npz` / `.ckpt` to git.
-- **Never** include them in the submission `.zip`.
-
-## Report integration
-
-Generated artifacts that flow into the LaTeX report (`LiteratureReview/main.tex`):
-
-- `docs/pipeline_diagram.png` → §3 (architecture overview)
-- `results/runtime_table.tex` → §4 (HMR 600× speedup claim)
-- `results/quadplot_img1.png` → §4 (qualitative example)
-- `results/agreement_table.tex` → §4 (only if stretch succeeds)
+Code: MIT. SMPL / SMPL-X / 4D-Humans / PHALP weights are non-commercial academic;
+each user must register and download independently. See
+[`checkpoints/DOWNLOAD.md`](checkpoints/DOWNLOAD.md). Never commit
+`*.pkl` / `*.npz` / `*.ckpt`.
