@@ -1,9 +1,0 @@
-image,device,smplify_runtime_s,hmr_runtime_ms,speedup_factor,mean_reproj_error_px,final_loss
-img1_standing,cuda,1.495,100.0,14.9,5.0,111.8
-img2_complex_pose,cuda,0.843,100.0,8.4,4.5,47.5
-img3_occluded,cuda,0.852,100.0,8.5,11.0,270.7
-img4_multi_person,cuda,0.848,100.0,8.5,3.7,34.8
-img1_standing,cpu,0.798,100.0,8.0,5.0,111.8
-img2_complex_pose,cpu,0.792,100.0,7.9,4.5,47.5
-img3_occluded,cpu,0.818,100.0,8.2,11.0,270.7
-img4_multi_person,cpu,0.827,100.0,8.3,3.7,34.8

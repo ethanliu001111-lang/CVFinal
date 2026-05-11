@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""C — Pose-as-feature similarity heatmap.
-
-Loads cached HMR vertices for each test image, derives 24 SMPL joints via
-the J_regressor, normalizes pose (root-centered + torso-scaled), and
-plots a 4×4 distance matrix.
-
-Story: 3D mesh extraction turns "pose" into a numeric feature you can
-compare across images — something 2D pixel keypoints can't do.
-
-Output: demo/results/extras/pose_similarity.png
-"""
+"""4×4 SMPL-pose distance heatmap (root-centered, torso-normalized)."""
 from __future__ import annotations
 
 import pickle
@@ -32,40 +22,37 @@ def load_j_regressor() -> np.ndarray:
     with open(SMPL_NEUTRAL_PKL, "rb") as f:
         smpl = pickle.load(f, encoding="latin1")
     J = smpl["J_regressor"]
-    return np.asarray(J.todense() if hasattr(J, "todense") else J)  # (24, 6890)
+    return np.asarray(J.todense() if hasattr(J, "todense") else J)
 
 
 def pick_center_person(verts_all: np.ndarray) -> np.ndarray:
-    """For multi-person images, take the person closest to image center in xy."""
     if verts_all.shape[0] == 1:
         return verts_all[0]
-    centroids = verts_all.mean(axis=1)  # (P, 3)
-    distances = np.linalg.norm(centroids[:, :2], axis=1)
-    return verts_all[np.argmin(distances)]
+    centroids = verts_all.mean(axis=1)
+    return verts_all[np.argmin(np.linalg.norm(centroids[:, :2], axis=1))]
 
 
 def normalize_pose(joints_24: np.ndarray) -> np.ndarray:
-    """Root-center + torso-scale normalize, so distances are pose-only."""
     rooted = joints_24 - joints_24[0]
-    torso = np.linalg.norm(joints_24[12] - joints_24[0])  # neck - pelvis
+    torso = np.linalg.norm(joints_24[12] - joints_24[0])
     return rooted / (torso + 1e-9)
 
 
 def main():
     npz_path = REPO_ROOT / "demo" / "results" / "hmr2_meshes.npz"
-    out_path = REPO_ROOT / "demo" / "results" / "extras" / "pose_similarity.png"
+    out_path = REPO_ROOT / "demo" / "showcase" / "extras" / "pose_similarity.png"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     z = np.load(npz_path)
-    Jreg = load_j_regressor()  # (24, 6890)
+    Jreg = load_j_regressor()
 
     poses = []
     for stem in IMAGES:
         verts_all = z[f"{stem}.jpg_verts"]
-        verts = pick_center_person(verts_all)
-        joints = Jreg @ verts  # (24, 3)
+        joints = Jreg @ pick_center_person(verts_all)
         poses.append(normalize_pose(joints))
 
-    P = np.stack(poses)  # (4, 24, 3)
+    P = np.stack(poses)
     n = len(IMAGES)
     D = np.zeros((n, n))
     for i in range(n):
@@ -80,13 +67,13 @@ def main():
     for i in range(n):
         for j in range(n):
             txt_color = "white" if D[i, j] < D.max() * 0.5 else "black"
-            ax.text(j, i, f"{D[i, j]:.2f}", ha="center", va="center", color=txt_color, fontsize=11)
+            ax.text(j, i, f"{D[i, j]:.2f}", ha="center", va="center",
+                    color=txt_color, fontsize=11)
     ax.set_title("Pose-feature distance matrix\n(SMPL joints, root-centered, torso-scaled)")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="mean per-joint L2 (torso units)")
     fig.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
-    print(f"✓ wrote {out_path.relative_to(REPO_ROOT)}")
-    print(f"  matrix:\n{D.round(3)}")
+    print(f"wrote {out_path.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":

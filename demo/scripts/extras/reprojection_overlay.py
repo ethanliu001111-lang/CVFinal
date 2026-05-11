@@ -1,19 +1,9 @@
 #!/usr/bin/env python3
-"""B — Reprojection consistency overlay.
+"""HMR 3D joints reprojected to image space, overlaid against HRNet 2D detections.
 
-Take HMR 2.0's predicted 3D joints, project them back to original-image
-pixel coords using HMR2's `cam_crop_to_full`, and overlay them on the
-input image alongside HRNet's direct 2D detections. If the dots line up,
-the bridge from S2 ("2D supervises 3D") is empirically self-consistent.
-
-We re-run ViTDet detection here (instead of relying on the cached
-hmr2_meshes.npz) because the cache doesn't store bboxes — they're needed
-to convert HMR's box-frame cam_t back to full-image coords.
-
-Output: demo/results/extras/reproj_<stem>.png  (one per test image).
-
-Indices map: HRNet uses COCO-17, HMR2 emits 45 joints in OpenPose-25 +
-extras layout. We overlay only the 12 reliable correspondences (limbs).
+Re-runs ViTDet + HMR (instead of using the cached hmr2_meshes.npz) because the
+cache doesn't store bboxes — needed to project box-frame cam_t back to full image.
+Writes an extras cache (with bbox info) that mini_smplify.py also consumes.
 """
 from __future__ import annotations
 
@@ -31,44 +21,34 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-# COCO-17 → HMR2 OpenPose-25 mapping for the 12 limb joints
-COCO_TO_HMR_OP25 = {
-    5: 5, 6: 2,           # L/R shoulder
-    7: 6, 8: 3,           # L/R elbow
-    9: 7, 10: 4,          # L/R wrist
-    11: 12, 12: 9,        # L/R hip
-    13: 13, 14: 10,       # L/R knee
-    15: 14, 16: 11,       # L/R ankle
-}
 
+# COCO-17 → HMR2 OpenPose-25 mapping for the 12 limb correspondences
+COCO_TO_HMR_OP25 = {
+    5: 5, 6: 2, 7: 6, 8: 3, 9: 7, 10: 4,
+    11: 12, 12: 9, 13: 13, 14: 10, 15: 14, 16: 11,
+}
 IMAGES = ["img1_standing", "img2_complex_pose", "img3_occluded", "img4_multi_person"]
 
 
-def cam_crop_to_full_np(cam_bbox: np.ndarray, box_center: np.ndarray,
-                        box_size: np.ndarray, img_w: int, img_h: int,
-                        focal_length: float = 5000.0) -> np.ndarray:
-    """numpy port of hmr2.utils.renderer.cam_crop_to_full (per-detection)."""
+def cam_crop_to_full_np(cam_bbox, box_center, box_size, img_w, img_h, focal_length=5000.0):
     s, tx, ty = cam_bbox
     cx, cy = box_center
-    b = box_size
-    bs = b * s + 1e-9
-    tz = 2.0 * focal_length / bs
-    tx_full = (2.0 * (cx - img_w / 2.0) / bs) + tx
-    ty_full = (2.0 * (cy - img_h / 2.0) / bs) + ty
-    return np.array([tx_full, ty_full, tz], dtype=np.float32)
+    bs = box_size * s + 1e-9
+    return np.array([
+        (2.0 * (cx - img_w / 2.0) / bs) + tx,
+        (2.0 * (cy - img_h / 2.0) / bs) + ty,
+        2.0 * focal_length / bs,
+    ], dtype=np.float32)
 
 
-def project_pinhole(joints_3d: np.ndarray, full_cam_t: np.ndarray,
-                    img_w: int, img_h: int, focal: float = 5000.0) -> np.ndarray:
-    """Standard pinhole: u = f * (J + t).x / (J+t).z + W/2."""
+def project_pinhole(joints_3d, full_cam_t, img_w, img_h, focal=5000.0):
     Jc = joints_3d + full_cam_t[None, :]
     u = focal * Jc[:, 0] / Jc[:, 2] + img_w / 2.0
     v = focal * Jc[:, 1] / Jc[:, 2] + img_h / 2.0
     return np.stack([u, v], axis=-1)
 
 
-def run_hmr_with_bbox(images: list[Path], device: str = "cuda"):
-    """Re-run detection + HMR2, returning per-image bbox + cam_bbox + joints + verts."""
+def run_hmr_with_bbox(images, device="cuda"):
     from hmr2.models import load_hmr2, DEFAULT_CHECKPOINT
     from hmr2.utils import recursive_to
     from hmr2.datasets.vitdet_dataset import ViTDetDataset
@@ -76,7 +56,6 @@ def run_hmr_with_bbox(images: list[Path], device: str = "cuda"):
     from detectron2.config import LazyConfig
     import hmr2 as _h
 
-    print("Loading HMR 2.0 + ViTDet …")
     model, cfg = load_hmr2(DEFAULT_CHECKPOINT)
     model = model.to(device).eval()
 
@@ -98,82 +77,66 @@ def run_hmr_with_bbox(images: list[Path], device: str = "cuda"):
         cls = det.pred_classes.cpu().numpy()
         boxes = det.pred_boxes.tensor.cpu().numpy()[cls == 0]
         if len(boxes) == 0:
-            print(f"  {img_path.name}: no person detected — skipping")
+            print(f"  {img_path.name}: no person")
             continue
 
         ds = ViTDetDataset(cfg, img_cv2, boxes)
         dl = torch.utils.data.DataLoader(ds, batch_size=1, shuffle=False)
-
         joints_all, verts_all, cam_bbox_all, box_centers, box_sizes = [], [], [], [], []
-        for i, batch in enumerate(dl):
+        for batch in dl:
             batch = recursive_to(batch, device)
             with torch.no_grad():
                 pred = model(batch)
-            joints_all.append(pred["pred_keypoints_3d"][0].cpu().numpy())  # (45, 3)
+            joints_all.append(pred["pred_keypoints_3d"][0].cpu().numpy())
             verts_all.append(pred["pred_vertices"][0].cpu().numpy())
-            cam_bbox_all.append(pred["pred_cam"][0].cpu().numpy())          # (s, tx, ty)
+            cam_bbox_all.append(pred["pred_cam"][0].cpu().numpy())
             box_centers.append(batch["box_center"][0].cpu().numpy())
             box_sizes.append(float(batch["box_size"][0].cpu().numpy()))
 
         out[img_path.name] = {
             "boxes": boxes, "img_w": W, "img_h": H,
-            "joints": np.stack(joints_all),  # (P, 45, 3)
+            "joints": np.stack(joints_all),
             "verts": np.stack(verts_all),
-            "cam_bbox": np.stack(cam_bbox_all),  # (P, 3)
-            "box_centers": np.stack(box_centers),  # (P, 2)
-            "box_sizes": np.asarray(box_sizes),  # (P,)
+            "cam_bbox": np.stack(cam_bbox_all),
+            "box_centers": np.stack(box_centers),
+            "box_sizes": np.asarray(box_sizes),
         }
         print(f"  {img_path.name}: {len(boxes)} persons")
     return out
 
 
-def pick_center_idx(boxes: np.ndarray, W: int, H: int) -> int:
+def pick_center_idx(boxes, W, H):
     centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
-    dists = np.linalg.norm(centers - np.array([W / 2, H / 2]), axis=-1)
-    return int(np.argmin(dists))
+    return int(np.argmin(np.linalg.norm(centers - np.array([W / 2, H / 2]), axis=-1)))
 
 
-def overlay_image(img_rgb: np.ndarray, hrnet_kpts: np.ndarray,
-                  hrnet_scores: np.ndarray, hmr_proj_2d: np.ndarray,
-                  out_path: Path, title: str):
-    """Side-by-side: HRNet kpts (cyan) and HMR-reprojected joints (red)."""
+def overlay_image(img_rgb, hrnet_kpts, hrnet_scores, hmr_proj_2d, out_path, title):
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(img_rgb)
 
-    # HRNet COCO-17 (filter low confidence)
     hr_pts = []
     for i in range(17):
         if hrnet_scores[i] > 0.3 and i in COCO_TO_HMR_OP25:
             hr_pts.append((hrnet_kpts[i, 0], hrnet_kpts[i, 1], COCO_TO_HMR_OP25[i]))
     if hr_pts:
-        hr_pts = np.asarray(hr_pts)
-        ax.scatter(hr_pts[:, 0], hr_pts[:, 1], s=110, marker="o",
+        hr_arr = np.asarray(hr_pts)
+        ax.scatter(hr_arr[:, 0], hr_arr[:, 1], s=110, marker="o",
                    facecolors="none", edgecolors="cyan", linewidths=2.5,
                    label="HRNet 2D detection")
 
-    # HMR projected (matched joints)
-    matched = list(set(int(c) for _, _, c in hr_pts)) if len(hr_pts) else list(set(COCO_TO_HMR_OP25.values()))
+    matched = list(set(int(c) for _, _, c in hr_pts)) if hr_pts else list(set(COCO_TO_HMR_OP25.values()))
     proj_pts = hmr_proj_2d[matched]
     ax.scatter(proj_pts[:, 0], proj_pts[:, 1], s=70, marker="x",
-               c="red", linewidths=2.5,
-               label="HMR 3D → reprojected 2D")
+               c="red", linewidths=2.5, label="HMR 3D → reprojected 2D")
 
-    # Lines connecting matched pairs (consistency error vector)
-    if len(hr_pts):
-        for x, y, hmr_idx in hr_pts:
-            px, py = hmr_proj_2d[int(hmr_idx)]
-            ax.plot([x, px], [y, py], color="yellow", lw=1, alpha=0.6)
-
-    # Mean error annotation
-    if len(hr_pts):
+    if hr_pts:
         errs = []
         for x, y, hmr_idx in hr_pts:
             px, py = hmr_proj_2d[int(hmr_idx)]
+            ax.plot([x, px], [y, py], color="yellow", lw=1, alpha=0.6)
             errs.append(np.hypot(x - px, y - py))
-        mean_err = np.mean(errs)
-        ax.text(0.02, 0.98, f"mean reproj error: {mean_err:.0f} px",
-                transform=ax.transAxes, va="top", ha="left",
-                fontsize=11, color="white",
+        ax.text(0.02, 0.98, f"mean reproj error: {np.mean(errs):.0f} px",
+                transform=ax.transAxes, va="top", ha="left", fontsize=11, color="white",
                 bbox=dict(facecolor="black", alpha=0.6, edgecolor="none"))
 
     ax.set_title(title)
@@ -182,29 +145,28 @@ def overlay_image(img_rgb: np.ndarray, hrnet_kpts: np.ndarray,
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"✓ wrote {out_path.relative_to(REPO_ROOT)}")
+    print(f"wrote {out_path.relative_to(REPO_ROOT)}")
 
 
 def main():
-    out_dir = REPO_ROOT / "demo" / "results" / "extras"
+    cache_dir = REPO_ROOT / "demo" / "results"
+    out_dir = REPO_ROOT / "demo" / "showcase" / "extras"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     images = [REPO_ROOT / "demo" / "test_images" / f"{s}.jpg" for s in IMAGES]
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     hmr_data = run_hmr_with_bbox(images, device=device)
 
-    # Persist a richer cache for downstream extras (mini-SMPLify also reads boxes)
-    cache_path = out_dir / "hmr_extras_cache.npz"
+    cache_path = cache_dir / "hmr_extras_cache.npz"
     payload = {}
     for name, d in hmr_data.items():
         for k, v in d.items():
             payload[f"{name}_{k}"] = np.asarray(v)
     np.savez_compressed(cache_path, **payload)
-    print(f"✓ wrote {cache_path.relative_to(REPO_ROOT)}")
+    print(f"wrote {cache_path.relative_to(REPO_ROOT)}")
 
-    hrnet = np.load(REPO_ROOT / "demo" / "results" / "hrnet_kpts.npz", allow_pickle=True)
-
+    hrnet = np.load(cache_dir / "hrnet_kpts.npz", allow_pickle=True)
     for img_path in images:
         if img_path.name not in hmr_data:
             continue
@@ -219,7 +181,6 @@ def main():
         img_rgb = cv2.imread(str(img_path))[:, :, ::-1]
         hk = hrnet[f"{img_path.name}_kpts"][0]
         hs = hrnet[f"{img_path.name}_scores"][0]
-
         overlay_image(img_rgb, hk, hs, proj_2d,
                       out_dir / f"reproj_{img_path.stem}.png",
                       title=f"{img_path.stem} — HMR 3D joints reprojected vs HRNet 2D")
